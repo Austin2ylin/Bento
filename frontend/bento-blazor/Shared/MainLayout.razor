@@ -1,0 +1,14 @@
+@inherits LayoutComponentBase
+
+<div class="layout-shell">
+    <aside class="sidebar">
+        <h2>Bento Blazor</h2>
+        <NavLink href="/" Match="NavLinkMatch.All">儀表板</NavLink>
+        <NavLink href="/menu">菜單頁</NavLink>
+        <NavLink href="/order">訂單頁</NavLink>
+    </aside>
+
+    <main class="main-content">
+        @Body
+    </main>
+</div>

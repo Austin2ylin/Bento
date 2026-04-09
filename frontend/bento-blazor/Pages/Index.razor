@@ -1,0 +1,42 @@
+@page "/"
+@inject BentoApiService Api
+
+<h1>Blazor 儀表板</h1>
+<p>這是替代前端，與 React 同樣透過 Gateway 存取 API。</p>
+
+<div class="stats-grid">
+    <article>
+        <h4>使用者總數</h4>
+        <strong>@users.Count</strong>
+    </article>
+    <article>
+        <h4>訂單總數</h4>
+        <strong>@orders.Count</strong>
+    </article>
+    <article>
+        <h4>待確認</h4>
+        <strong>@orders.Count(x => x.Status == "待確認")</strong>
+    </article>
+    <article>
+        <h4>已完成</h4>
+        <strong>@orders.Count(x => x.Status == "已完成")</strong>
+    </article>
+</div>
+
+<button @onclick="LoadAsync">重新整理</button>
+
+@code {
+    private List<UserDto> users = new();
+    private List<OrderDto> orders = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        users = await Api.GetUsersAsync();
+        orders = await Api.GetOrdersAsync();
+    }
+}

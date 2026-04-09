@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bento-gateway
+  namespace: bento
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bento-gateway
+  template:
+    metadata:
+      labels:
+        app: bento-gateway
+    spec:
+      containers:
+        - name: bento-gateway
+          image: your-dockerhub-name/bento-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: bento-app-config
+                  key: ASPNETCORE_ENVIRONMENT
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bento-gateway
+  namespace: bento
+spec:
+  selector:
+    app: bento-gateway
+  ports:
+    - port: 5000
+      targetPort: 5000
+      protocol: TCP

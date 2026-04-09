@@ -1,0 +1,139 @@
+services:
+  bento-api:
+    container_name: ${BENTO_API_CONTAINER_NAME:-bento-api}
+    build:
+      context: ./Bento.Api
+      dockerfile: Dockerfile
+    image: ${BENTO_API_IMAGE:-bento-api:latest}
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__PostgreSql: Host=postgres;Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Redis__ConnectionString: redis:${REDIS_PORT:-6379},password=${REDIS_PASSWORD}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: ${RABBITMQ_PORT:-5672}
+      RabbitMq__UserName: ${RABBITMQ_DEFAULT_USER}
+      RabbitMq__Password: ${RABBITMQ_DEFAULT_PASS}
+      RabbitMq__QueueName: ${RABBITMQ_QUEUE_NAME:-order-created}
+      Mongo__ConnectionString: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:${MONGO_PORT:-27017}
+      Mongo__Database: ${MONGO_DATABASE:-bento_logs}
+      Mongo__OrderCollection: ${MONGO_ORDER_COLLECTION:-order_logs}
+      Cors__AllowedOrigins__0: ${CORS_ORIGIN_REACT:-http://localhost:3000}
+      Cors__AllowedOrigins__1: ${CORS_ORIGIN_BLAZOR:-http://localhost:3001}
+      Cors__AllowedOrigins__2: ${CORS_ORIGIN_NGINX:-http://localhost}
+    ports:
+      - "${BENTO_API_PORT:-5050}:5050"
+    depends_on:
+      - postgres
+      - mongo
+      - redis
+      - rabbitmq
+    networks:
+      - bento-network
+
+  bento-gateway:
+    container_name: ${BENTO_GATEWAY_CONTAINER_NAME:-bento-gateway}
+    build:
+      context: ./Bento.Gateway
+      dockerfile: Dockerfile
+    image: ${BENTO_GATEWAY_IMAGE:-bento-gateway:latest}
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+    ports:
+      - "${BENTO_GATEWAY_PORT:-5000}:5000"
+    depends_on:
+      - bento-api
+    networks:
+      - bento-network
+
+  postgres:
+    container_name: ${POSTGRES_CONTAINER_NAME:-postgres}
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bento-network
+
+  mssql:
+    container_name: ${MSSQL_CONTAINER_NAME:-mssql}
+    image: ${MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
+    environment:
+      ACCEPT_EULA: ${MSSQL_ACCEPT_EULA:-Y}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_PID: ${MSSQL_PID:-Developer}
+    ports:
+      - "${MSSQL_PORT:-1433}:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - bento-network
+
+  mariadb:
+    container_name: ${MARIADB_CONTAINER_NAME:-mariadb}
+    image: ${MARIADB_IMAGE:-mariadb:11}
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-bentodb}
+      MARIADB_USER: ${MARIADB_USER:-bento}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+    ports:
+      - "${MARIADB_PORT:-3306}:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - bento-network
+
+  mongo:
+    container_name: ${MONGO_CONTAINER_NAME:-mongo}
+    image: ${MONGO_IMAGE:-mongo:7}
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - bento-network
+
+  redis:
+    container_name: ${REDIS_CONTAINER_NAME:-redis}
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bento-network
+
+  rabbitmq:
+    container_name: ${RABBITMQ_CONTAINER_NAME:-rabbitmq}
+    image: ${RABBITMQ_IMAGE:-rabbitmq:3-management}
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - bento-network
+
+volumes:
+  postgres_data:
+  mssql_data:
+  mariadb_data:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  bento-network:
+    name: ${BENTO_NETWORK_NAME:-bento-network}

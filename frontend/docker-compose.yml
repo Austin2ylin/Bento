@@ -1,0 +1,35 @@
+services:
+  bento-client:
+    container_name: ${BENTO_CLIENT_CONTAINER_NAME:-bento-client}
+    build:
+      context: ./bento-client
+      dockerfile: Dockerfile
+      args:
+        VITE_BENTO_GATEWAY_BASE_URL: ${VITE_BENTO_GATEWAY_BASE_URL:-http://localhost:5000/gateway}
+    image: ${BENTO_CLIENT_IMAGE:-bento-client:latest}
+    ports:
+      - "${BENTO_CLIENT_PORT:-3000}:80"
+    depends_on:
+      - bento-gateway
+    networks:
+      - bento-network
+
+  bento-blazor:
+    container_name: ${BENTO_BLAZOR_CONTAINER_NAME:-bento-blazor}
+    build:
+      context: ./bento-blazor
+      dockerfile: Dockerfile
+    image: ${BENTO_BLAZOR_IMAGE:-bento-blazor:latest}
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      Gateway__BaseUrl: ${BLAZOR_GATEWAY_BASE_URL:-http://bento-gateway:5000/gateway}
+    ports:
+      - "${BENTO_BLAZOR_PORT:-3001}:3001"
+    depends_on:
+      - bento-gateway
+    networks:
+      - bento-network
+
+networks:
+  bento-network:
+    name: ${BENTO_NETWORK_NAME:-bento-network}

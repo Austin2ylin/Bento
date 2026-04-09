@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_NAMESPACE = "${env.DOCKERHUB_NAMESPACE ?: 'your-dockerhub-name'}"
+        IMAGE_TAG = "${env.BUILD_NUMBER ?: 'local'}"
+    }
+
+    stages {
+        stage('build') {
+            steps {
+                sh '''
+                  set -e
+                  dotnet restore backend/Bento.Api/Bento.Api.csproj
+                  dotnet build backend/Bento.Api/Bento.Api.csproj -c Release --no-restore
+                  dotnet restore backend/Bento.Gateway/Bento.Gateway.csproj
+                  dotnet build backend/Bento.Gateway/Bento.Gateway.csproj -c Release --no-restore
+                  dotnet restore frontend/bento-blazor/bento-blazor.csproj
+                  dotnet build frontend/bento-blazor/bento-blazor.csproj -c Release --no-restore
+                '''
+            }
+        }
+
+        stage('dotnet test') {
+            steps {
+                sh '''
+                  set -e
+                  TEST_PROJECTS=$(find . -name "*Tests.csproj" | tr '\n' ' ')
+                  if [ -z "$TEST_PROJECTS" ]; then
+                    echo "No test project found, skip dotnet test"
+                  else
+                    dotnet test $TEST_PROJECTS -c Release --no-build
+                  fi
+                '''
+            }
+        }
+
+        stage('docker build') {
+            steps {
+                sh '''
+                  set -e
+                  docker build -t $DOCKERHUB_NAMESPACE/bento-api:$IMAGE_TAG backend/Bento.Api
+                  docker build -t $DOCKERHUB_NAMESPACE/bento-gateway:$IMAGE_TAG backend/Bento.Gateway
+                  docker build -t $DOCKERHUB_NAMESPACE/bento-client:$IMAGE_TAG frontend/bento-client
+                  docker build -t $DOCKERHUB_NAMESPACE/bento-blazor:$IMAGE_TAG frontend/bento-blazor
+                '''
+            }
+        }
+
+        stage('docker push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                      set -e
+                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                      docker push $DOCKERHUB_NAMESPACE/bento-api:$IMAGE_TAG
+                      docker push $DOCKERHUB_NAMESPACE/bento-gateway:$IMAGE_TAG
+                      docker push $DOCKERHUB_NAMESPACE/bento-client:$IMAGE_TAG
+                      docker push $DOCKERHUB_NAMESPACE/bento-blazor:$IMAGE_TAG
+                    '''
+                }
+            }
+        }
+    }
+}

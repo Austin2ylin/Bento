@@ -1,0 +1,138 @@
+@page "/order"
+@inject BentoApiService Api
+
+<h1>訂單頁面</h1>
+<p>建立訂單並更新狀態（待確認/製作中/已完成/已取消）。</p>
+
+<div class="order-section">
+    <label>訂購人</label>
+    <select @bind="selectedUserId">
+        @foreach (var user in users)
+        {
+            <option value="@user.Id">@user.Name（@user.Email）</option>
+        }
+    </select>
+
+    <h3>選擇品項</h3>
+    @foreach (var item in menu.Where(x => x.IsAvailable))
+    {
+        <div class="line-item">
+            <span>@item.Name (NT$ @item.Price)</span>
+            <input type="number" min="0" max="20" value="@GetQuantity(item.Id)" @oninput="(e => OnQuantityChanged(item.Id, e.Value?.ToString()))" />
+        </div>
+    }
+
+    <button @onclick="CreateOrderAsync">建立訂單</button>
+</div>
+
+<h3>訂單列表</h3>
+<table>
+    <thead>
+        <tr>
+            <th>編號</th>
+            <th>使用者</th>
+            <th>總額</th>
+            <th>狀態</th>
+            <th>更新</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var order in orders)
+        {
+            <tr>
+                <td>@order.Id</td>
+                <td>@(order.UserName ?? $"#{order.UserId}")</td>
+                <td>NT$ @order.TotalAmount</td>
+                <td>@order.Status</td>
+                <td>
+                    <select @bind="order.Status" @bind:after="() => UpdateOrderStatusAsync(order.Id, order.Status)">
+                        <option value="待確認">待確認</option>
+                        <option value="製作中">製作中</option>
+                        <option value="已完成">已完成</option>
+                        <option value="已取消">已取消</option>
+                    </select>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <p>@message</p>
+}
+
+@code {
+    private List<UserDto> users = new();
+    private List<MenuItemDto> menu = new();
+    private List<OrderDto> orders = new();
+    private int selectedUserId;
+    private readonly Dictionary<int, int> quantities = new();
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        users = await Api.GetUsersAsync();
+        menu = await Api.GetMenuAsync();
+        orders = await Api.GetOrdersAsync();
+
+        if (selectedUserId <= 0 && users.Count > 0)
+        {
+            selectedUserId = users[0].Id;
+        }
+    }
+
+    private int GetQuantity(int menuItemId)
+    {
+        return quantities.TryGetValue(menuItemId, out var value) ? value : 0;
+    }
+
+    private void OnQuantityChanged(int menuItemId, string? rawValue)
+    {
+        if (!int.TryParse(rawValue, out var quantity))
+        {
+            quantity = 0;
+        }
+
+        quantities[menuItemId] = Math.Max(0, quantity);
+    }
+
+    private async Task CreateOrderAsync()
+    {
+        var items = quantities
+            .Where(x => x.Value > 0)
+            .Select(x => new CreateOrderItemRequest
+            {
+                MenuItemId = x.Key,
+                Quantity = x.Value
+            })
+            .ToList();
+
+        if (selectedUserId <= 0 || items.Count == 0)
+        {
+            message = "請先選擇訂購人並填寫至少一個品項數量。";
+            return;
+        }
+
+        await Api.CreateOrderAsync(new CreateOrderRequest
+        {
+            UserId = selectedUserId,
+            Items = items
+        });
+
+        message = "訂單已建立。";
+        quantities.Clear();
+        await LoadAsync();
+    }
+
+    private async Task UpdateOrderStatusAsync(int orderId, string status)
+    {
+        await Api.UpdateOrderStatusAsync(orderId, status);
+        await LoadAsync();
+    }
+}

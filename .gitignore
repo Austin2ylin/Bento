@@ -1,0 +1,18 @@
+# Environment
+.env
+
+# .NET
+bin/
+obj/
+
+# Node.js
+node_modules/
+
+# Frontend build output
+dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

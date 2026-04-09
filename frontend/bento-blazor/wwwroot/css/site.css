@@ -1,0 +1,96 @@
+body {
+  margin: 0;
+  font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.layout-shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #0f172a;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.sidebar a {
+  color: #bfdbfe;
+  text-decoration: none;
+}
+
+.sidebar a.active {
+  color: #fff;
+  font-weight: 700;
+}
+
+.main-content {
+  padding: 1.25rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.stats-grid article {
+  background: #e2e8f0;
+  padding: 0.75rem;
+  border-radius: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid #cbd5e1;
+  text-align: left;
+  padding: 0.55rem;
+}
+
+.order-section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.line-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+input,
+select,
+button {
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  padding: 0.45rem 0.6rem;
+}
+
+button {
+  border: 0;
+  background: #0f766e;
+  color: #fff;
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .layout-shell {
+    grid-template-columns: 1fr;
+  }
+}

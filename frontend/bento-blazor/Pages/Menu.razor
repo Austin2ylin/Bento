@@ -1,0 +1,53 @@
+@page "/menu"
+@inject BentoApiService Api
+
+<h1>菜單頁面</h1>
+<p>顯示目前可供應的便當品項。</p>
+
+<button @onclick="LoadAsync">重新整理菜單</button>
+
+@if (loading)
+{
+    <p>載入中...</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr>
+                <th>編號</th>
+                <th>名稱</th>
+                <th>價格</th>
+                <th>狀態</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in menu)
+            {
+                <tr>
+                    <td>@item.Id</td>
+                    <td>@item.Name</td>
+                    <td>NT$ @item.Price</td>
+                    <td>@(item.IsAvailable ? "供應中" : "停售")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<MenuItemDto> menu = new();
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        menu = await Api.GetMenuAsync();
+        loading = false;
+    }
+}
