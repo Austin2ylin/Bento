@@ -29,6 +29,16 @@ services:
       - rabbitmq
     networks:
       - bento-network
+    # --- 安全性設定 ---
+    security_opt:
+      - no-new-privileges:true   # 禁止 setuid/setcap 提權
+    cap_drop:
+      - ALL                      # 撤除所有 Linux Capabilities，最小權限原則
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"           # 限制 CPU 使用，防止單容器耗盡資源
+          memory: 512M
 
   bento-gateway:
     container_name: ${BENTO_GATEWAY_CONTAINER_NAME:-bento-gateway}
@@ -44,6 +54,16 @@ services:
       - bento-api
     networks:
       - bento-network
+    # --- 安全性設定 ---
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
 
   postgres:
     container_name: ${POSTGRES_CONTAINER_NAME:-postgres}
@@ -58,6 +78,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - bento-network
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
 
   mssql:
     container_name: ${MSSQL_CONTAINER_NAME:-mssql}
@@ -72,6 +99,13 @@ services:
       - mssql_data:/var/opt/mssql
     networks:
       - bento-network
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 2G             # SQL Server 最低需求約 2GB
 
   mariadb:
     container_name: ${MARIADB_CONTAINER_NAME:-mariadb}
@@ -87,6 +121,13 @@ services:
       - mariadb_data:/var/lib/mysql
     networks:
       - bento-network
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
 
   mongo:
     container_name: ${MONGO_CONTAINER_NAME:-mongo}
@@ -100,6 +141,13 @@ services:
       - mongo_data:/data/db
     networks:
       - bento-network
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
 
   redis:
     container_name: ${REDIS_CONTAINER_NAME:-redis}
@@ -111,6 +159,15 @@ services:
       - redis_data:/data
     networks:
       - bento-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
 
   rabbitmq:
     container_name: ${RABBITMQ_CONTAINER_NAME:-rabbitmq}
@@ -125,6 +182,13 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - bento-network
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
 
 volumes:
   postgres_data:

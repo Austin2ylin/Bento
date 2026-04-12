@@ -7,12 +7,23 @@ services:
       args:
         VITE_BENTO_GATEWAY_BASE_URL: ${VITE_BENTO_GATEWAY_BASE_URL:-http://localhost:5000/gateway}
     image: ${BENTO_CLIENT_IMAGE:-bento-client:latest}
+    # nginx-unprivileged 內部監聽 8080（非特權 port），對外仍是 3000
     ports:
-      - "${BENTO_CLIENT_PORT:-3000}:80"
+      - "${BENTO_CLIENT_PORT:-3000}:8080"
     depends_on:
       - bento-gateway
     networks:
       - bento-network
+    # --- 安全性設定 ---
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
 
   bento-blazor:
     container_name: ${BENTO_BLAZOR_CONTAINER_NAME:-bento-blazor}
@@ -29,6 +40,16 @@ services:
       - bento-gateway
     networks:
       - bento-network
+    # --- 安全性設定 ---
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
 
 networks:
   bento-network:

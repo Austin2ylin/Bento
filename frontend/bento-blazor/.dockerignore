@@ -1,0 +1,16 @@
+# 編譯產出物，不需要打進 image（Dockerfile 內會重新 build）
+bin/
+obj/
+
+# 環境變數與密碼檔，絕對不能進 image
+.env
+.env.*
+
+# Visual Studio 暫存檔
+*.user
+*.suo
+.vs/
+
+# Dockerfile 本身不需要複製進去
+Dockerfile
+.dockerignore

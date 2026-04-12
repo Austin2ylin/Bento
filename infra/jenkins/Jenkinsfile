@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_NAMESPACE = "${env.DOCKERHUB_NAMESPACE ?: 'your-dockerhub-name'}"
+        // DOCKERHUB_USERNAME 從 Jenkins Credentials 或環境變數注入，不寫死在這裡
+        DOCKERHUB_NAMESPACE = "${env.DOCKERHUB_USERNAME ?: 'Austin2ylin'}"
         IMAGE_TAG = "${env.BUILD_NUMBER ?: 'local'}"
     }
 
