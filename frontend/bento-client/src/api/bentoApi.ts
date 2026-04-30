@@ -18,38 +18,40 @@ const api = axios.create({
   timeout: 10000,
 });
 
+const cacheAdminKey = import.meta.env.VITE_BENTO_CACHE_ADMIN_KEY;
+
 export const bentoApi = {
   async getMenu(): Promise<MenuItem[]> {
-    const { data } = await api.get<MenuItem[]>("/api/menu");
+    const { data } = await api.get<MenuItem[]>("/api/menus");
     return data;
   },
 
   async createMenu(payload: CreateMenuItemRequest): Promise<MenuItem> {
-    const { data } = await api.post<MenuItem>("/api/menu", payload);
+    const { data } = await api.post<MenuItem>("/api/menus", payload);
     return data;
   },
 
   async getOrders(): Promise<Order[]> {
-    const { data } = await api.get<Order[]>("/api/order");
+    const { data } = await api.get<Order[]>("/api/orders");
     return data;
   },
 
   async createOrder(payload: CreateOrderRequest): Promise<Order> {
-    const { data } = await api.post<Order>("/api/order", payload);
+    const { data } = await api.post<Order>("/api/orders", payload);
     return data;
   },
 
   async updateOrderStatus(id: number, status: string): Promise<void> {
-    await api.patch(`/api/order/${id}/status`, { status });
+    await api.patch(`/api/orders/${id}/status`, { status });
   },
 
   async getUsers(): Promise<User[]> {
-    const { data } = await api.get<User[]>("/api/user");
+    const { data } = await api.get<User[]>("/api/users");
     return data;
   },
 
   async createUser(payload: CreateUserRequest): Promise<User> {
-    const { data } = await api.post<User>("/api/user", payload);
+    const { data } = await api.post<User>("/api/users", payload);
     return data;
   },
 
@@ -59,6 +61,8 @@ export const bentoApi = {
   },
 
   async clearMenuCache(): Promise<void> {
-    await api.delete("/api/cache/menu");
+    await api.delete("/api/cache/menu", {
+      headers: cacheAdminKey ? { "X-Cache-Admin-Key": cacheAdminKey } : undefined,
+    });
   },
 };

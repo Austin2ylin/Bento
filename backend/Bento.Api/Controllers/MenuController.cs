@@ -1,3 +1,4 @@
+using Bento.Api.Constants;
 using Bento.Api.Data;
 using Bento.Api.Models;
 using Bento.Api.Services;
@@ -7,10 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Bento.Api.Controllers;
 
 [ApiController]
-[Route("api/menu")]
+[Route("api/menus")]
 public class MenuController : ControllerBase
 {
-    private const string MenuCacheKey = "menu:list";
     private readonly BentoDbContext _dbContext;
     private readonly IRedisService _redisService;
 
@@ -21,18 +21,39 @@ public class MenuController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<MenuItem>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<MenuItemResponse>>> GetAll(CancellationToken cancellationToken)
     {
-        var menu = await _dbContext.MenuItems
+        var cached = await _redisService.GetAsync<List<MenuItemResponse>>(CacheKeys.MenuList, cancellationToken);
+        if (cached is not null)
+        {
+            return Ok(cached);
+        }
+
+        var items = await _dbContext.MenuItems
             .AsNoTracking()
             .OrderBy(x => x.Id)
+            .Select(x => new MenuItemResponse(x.Id, x.Name, x.Price, x.IsAvailable, x.UpdatedAt))
             .ToListAsync(cancellationToken);
 
-        return Ok(menu);
+        await _redisService.SetAsync(CacheKeys.MenuList, items, TimeSpan.FromMinutes(10), cancellationToken);
+
+        return Ok(items);
+    }
+
+    [HttpGet("{id:int:min(1)}")]
+    public async Task<ActionResult<MenuItemResponse>> GetById(int id, CancellationToken cancellationToken)
+    {
+        var item = await _dbContext.MenuItems
+            .AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new MenuItemResponse(x.Id, x.Name, x.Price, x.IsAvailable, x.UpdatedAt))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return item is null ? NotFound() : Ok(item);
     }
 
     [HttpPost]
-    public async Task<ActionResult<MenuItem>> Create([FromBody] CreateMenuItemRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<MenuItemResponse>> Create([FromBody] CreateMenuItemRequest request, CancellationToken cancellationToken)
     {
         var menuItem = new MenuItem
         {
@@ -45,13 +66,14 @@ public class MenuController : ControllerBase
         _dbContext.MenuItems.Add(menuItem);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _redisService.RemoveAsync(MenuCacheKey, cancellationToken);
+        await _redisService.RemoveAsync(CacheKeys.MenuList, cancellationToken);
 
-        return Created($"/api/menu/{menuItem.Id}", menuItem);
+        var response = new MenuItemResponse(menuItem.Id, menuItem.Name, menuItem.Price, menuItem.IsAvailable, menuItem.UpdatedAt);
+        return CreatedAtAction(nameof(GetById), new { id = menuItem.Id }, response);
     }
 
     [HttpPut("{id:int:min(1)}")]
-    public async Task<ActionResult<MenuItem>> Update(int id, [FromBody] UpdateMenuItemRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<MenuItemResponse>> Update(int id, [FromBody] UpdateMenuItemRequest request, CancellationToken cancellationToken)
     {
         var menuItem = await _dbContext.MenuItems.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (menuItem is null)
@@ -65,9 +87,9 @@ public class MenuController : ControllerBase
         menuItem.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _redisService.RemoveAsync(MenuCacheKey, cancellationToken);
+        await _redisService.RemoveAsync(CacheKeys.MenuList, cancellationToken);
 
-        return Ok(menuItem);
+        return Ok(new MenuItemResponse(menuItem.Id, menuItem.Name, menuItem.Price, menuItem.IsAvailable, menuItem.UpdatedAt));
     }
 
     [HttpDelete("{id:int:min(1)}")]
@@ -82,7 +104,7 @@ public class MenuController : ControllerBase
         _dbContext.MenuItems.Remove(menuItem);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _redisService.RemoveAsync(MenuCacheKey, cancellationToken);
+        await _redisService.RemoveAsync(CacheKeys.MenuList, cancellationToken);
 
         return NoContent();
     }
