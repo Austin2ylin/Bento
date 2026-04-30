@@ -1,4 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
+using Bento.Api.Constants;
 using Bento.Api.Data;
+using Bento.Api.Models;
 using Bento.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,20 +13,27 @@ namespace Bento.Api.Controllers;
 [Route("api/cache")]
 public class CacheController : ControllerBase
 {
-    private const string MenuCacheKey = "menu:list";
     private readonly BentoDbContext _dbContext;
+    private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _environment;
     private readonly IRedisService _redisService;
 
-    public CacheController(BentoDbContext dbContext, IRedisService redisService)
+    public CacheController(
+        BentoDbContext dbContext,
+        IConfiguration configuration,
+        IWebHostEnvironment environment,
+        IRedisService redisService)
     {
         _dbContext = dbContext;
+        _configuration = configuration;
+        _environment = environment;
         _redisService = redisService;
     }
 
     [HttpGet("menu")]
     public async Task<IActionResult> GetMenuCache(CancellationToken cancellationToken)
     {
-        var cached = await _redisService.GetAsync<List<MenuCacheItem>>(MenuCacheKey, cancellationToken);
+        var cached = await _redisService.GetAsync<List<MenuItemResponse>>(CacheKeys.MenuList, cancellationToken);
         if (cached is not null)
         {
             return Ok(new
@@ -34,18 +45,11 @@ public class CacheController : ControllerBase
 
         var menu = await _dbContext.MenuItems
             .AsNoTracking()
-            .Where(x => x.IsAvailable)
             .OrderBy(x => x.Id)
-            .Select(x => new MenuCacheItem
-            {
-                Id = x.Id,
-                Name = x.Name,
-                Price = x.Price,
-                IsAvailable = x.IsAvailable
-            })
+            .Select(x => new MenuItemResponse(x.Id, x.Name, x.Price, x.IsAvailable, x.UpdatedAt))
             .ToListAsync(cancellationToken);
 
-        await _redisService.SetAsync(MenuCacheKey, menu, TimeSpan.FromMinutes(10), cancellationToken);
+        await _redisService.SetAsync(CacheKeys.MenuList, menu, TimeSpan.FromMinutes(10), cancellationToken);
 
         return Ok(new
         {
@@ -57,15 +61,32 @@ public class CacheController : ControllerBase
     [HttpDelete("menu")]
     public async Task<IActionResult> ClearMenuCache(CancellationToken cancellationToken)
     {
-        await _redisService.RemoveAsync(MenuCacheKey, cancellationToken);
+        if (!IsCacheAdminAuthorized())
+        {
+            return Unauthorized(new { message = "缺少或無效的快取管理金鑰。" });
+        }
+
+        await _redisService.RemoveAsync(CacheKeys.MenuList, cancellationToken);
         return NoContent();
     }
 
-    public class MenuCacheItem
+    private bool IsCacheAdminAuthorized()
     {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public decimal Price { get; set; }
-        public bool IsAvailable { get; set; }
+        var expectedKey = _configuration["Cache:AdminApiKey"];
+        if (string.IsNullOrWhiteSpace(expectedKey))
+        {
+            return !_environment.IsProduction();
+        }
+
+        if (!Request.Headers.TryGetValue("X-Cache-Admin-Key", out var providedKey))
+        {
+            return false;
+        }
+
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
+        var providedBytes = Encoding.UTF8.GetBytes(providedKey.ToString());
+
+        return expectedBytes.Length == providedBytes.Length
+            && CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
     }
 }

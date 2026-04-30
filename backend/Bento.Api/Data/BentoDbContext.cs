@@ -13,6 +13,7 @@ public class BentoDbContext : DbContext
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,11 +66,22 @@ public class BentoDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<OutboxMessage>(entity =>
+        {
+            entity.ToTable("outbox_messages");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Type).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.LastError).HasMaxLength(1000);
+            entity.HasIndex(x => new { x.ProcessedAt, x.NextAttemptAt });
+            entity.HasIndex(x => x.AggregateId);
+        });
+
+        var seedDate = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         modelBuilder.Entity<MenuItem>().HasData(
-            new MenuItem { Id = 1, Name = "排骨便當", Price = 110, IsAvailable = true, UpdatedAt = DateTime.UtcNow },
-            new MenuItem { Id = 2, Name = "雞腿便當", Price = 120, IsAvailable = true, UpdatedAt = DateTime.UtcNow },
-            new MenuItem { Id = 3, Name = "鯖魚便當", Price = 130, IsAvailable = true, UpdatedAt = DateTime.UtcNow },
-            new MenuItem { Id = 4, Name = "素食便當", Price = 100, IsAvailable = true, UpdatedAt = DateTime.UtcNow }
+            new MenuItem { Id = 1, Name = "排骨便當", Price = 110, IsAvailable = true, UpdatedAt = seedDate },
+            new MenuItem { Id = 2, Name = "雞腿便當", Price = 120, IsAvailable = true, UpdatedAt = seedDate },
+            new MenuItem { Id = 3, Name = "鯖魚便當", Price = 130, IsAvailable = true, UpdatedAt = seedDate },
+            new MenuItem { Id = 4, Name = "素食便當", Price = 100, IsAvailable = true, UpdatedAt = seedDate }
         );
     }
 }

@@ -10,11 +10,14 @@ public interface IRabbitMqService
     Task PublishOrderCreatedAsync(Order order, CancellationToken cancellationToken = default);
 }
 
-public class RabbitMqService : IRabbitMqService
+public class RabbitMqService : IRabbitMqService, IDisposable
 {
     private readonly ILogger<RabbitMqService> _logger;
     private readonly ConnectionFactory _factory;
     private readonly string _queueName;
+    private IConnection? _connection;
+    private IModel? _channel;
+    private readonly object _sync = new();
 
     public RabbitMqService(IConfiguration configuration, ILogger<RabbitMqService> logger)
     {
@@ -34,37 +37,56 @@ public class RabbitMqService : IRabbitMqService
 
     public Task PublishOrderCreatedAsync(Order order, CancellationToken cancellationToken = default)
     {
-        var payload = JsonSerializer.Serialize(new
+        lock (_sync)
         {
-            order.Id,
-            order.UserId,
-            order.TotalAmount,
-            order.Status,
-            order.OrderedAt
-        });
+            EnsureChannel();
 
-        using var connection = _factory.CreateConnection();
-        using var channel = connection.CreateModel();
+            var payload = JsonSerializer.Serialize(new
+            {
+                order.Id,
+                order.UserId,
+                order.TotalAmount,
+                order.Status,
+                order.OrderedAt
+            });
 
-        channel.QueueDeclare(
+            var body = Encoding.UTF8.GetBytes(payload);
+            var properties = _channel!.CreateBasicProperties();
+            properties.Persistent = true;
+
+            _channel.BasicPublish(
+                exchange: string.Empty,
+                routingKey: _queueName,
+                basicProperties: properties,
+                body: body);
+        }
+
+        _logger.LogInformation("已推送訂單訊息至 RabbitMQ，OrderId: {OrderId}", order.Id);
+        return Task.CompletedTask;
+    }
+
+    // 延遲建立連線，並在連線中斷時自動重連
+    private void EnsureChannel()
+    {
+        if (_channel is { IsOpen: true })
+            return;
+
+        _channel?.Dispose();
+        _connection?.Dispose();
+
+        _connection = _factory.CreateConnection();
+        _channel = _connection.CreateModel();
+        _channel.QueueDeclare(
             queue: _queueName,
             durable: true,
             exclusive: false,
             autoDelete: false,
             arguments: null);
+    }
 
-        var body = Encoding.UTF8.GetBytes(payload);
-        var properties = channel.CreateBasicProperties();
-        properties.Persistent = true;
-
-        channel.BasicPublish(
-            exchange: string.Empty,
-            routingKey: _queueName,
-            basicProperties: properties,
-            body: body);
-
-        _logger.LogInformation("已推送訂單訊息至 RabbitMQ，OrderId: {OrderId}", order.Id);
-
-        return Task.CompletedTask;
+    public void Dispose()
+    {
+        _channel?.Dispose();
+        _connection?.Dispose();
     }
 }

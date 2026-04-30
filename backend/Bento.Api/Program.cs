@@ -9,7 +9,6 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 路由規則統一小寫，並搭配 Controller 上的 id:int:min(1) 進行限制
 builder.Services.AddRouting(options =>
 {
     options.LowercaseUrls = true;
@@ -43,6 +42,9 @@ builder.Services.AddCors(options =>
             return;
         }
 
+        if (builder.Environment.IsProduction())
+            throw new InvalidOperationException("正式環境必須在 Cors:AllowedOrigins 設定允許的來源清單。");
+
         policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
     });
 });
@@ -52,8 +54,12 @@ var redisConnection = builder.Configuration.GetSection("Redis")["ConnectionStrin
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnection));
 builder.Services.AddScoped<IRedisService, RedisService>();
-builder.Services.AddScoped<IRabbitMqService, RabbitMqService>();
-builder.Services.AddScoped<IMongoService, MongoService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+
+// Singleton：持久連線，重用 RabbitMQ channel；MongoClient 本身為 thread-safe 設計
+builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
+builder.Services.AddSingleton<IMongoService, MongoService>();
+builder.Services.AddHostedService<OutboxDispatcherService>();
 
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<OrderValidator>();

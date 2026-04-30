@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Bento.Api.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace Bento.Api.Models;
@@ -14,7 +15,7 @@ public class Order
     public DateTime OrderedAt { get; set; } = DateTime.UtcNow;
 
     [MaxLength(20)]
-    public string Status { get; set; } = "待確認";
+    public string Status { get; set; } = OrderStatuses.Pending;
 
     [Precision(18, 2)]
     public decimal TotalAmount { get; set; }
