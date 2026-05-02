@@ -6,7 +6,9 @@ RUN npm install
 
 COPY . .
 ARG VITE_BENTO_GATEWAY_BASE_URL=http://localhost:5000/gateway
+ARG VITE_BENTO_CACHE_ADMIN_KEY=
 ENV VITE_BENTO_GATEWAY_BASE_URL=${VITE_BENTO_GATEWAY_BASE_URL}
+ENV VITE_BENTO_CACHE_ADMIN_KEY=${VITE_BENTO_CACHE_ADMIN_KEY}
 RUN npm run build
 
 # nginx-unprivileged：以非 root 使用者（uid 101）執行，避免 root 提權風險

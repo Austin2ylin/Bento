@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_BENTO_GATEWAY_BASE_URL: ${VITE_BENTO_GATEWAY_BASE_URL:-http://localhost:5000/gateway}
+        VITE_BENTO_CACHE_ADMIN_KEY: ${VITE_BENTO_CACHE_ADMIN_KEY:-}
     image: ${BENTO_CLIENT_IMAGE:-bento-client:latest}
     # nginx-unprivileged 內部監聽 8080（非特權 port），對外仍是 3000
     ports:

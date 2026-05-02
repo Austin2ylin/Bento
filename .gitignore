@@ -7,6 +7,8 @@ obj/
 
 # Node.js
 node_modules/
+.npmrc
+*.tsbuildinfo
 
 # Frontend build output
 dist/
