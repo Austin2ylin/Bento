@@ -1,42 +1,94 @@
 @page "/"
 @inject BentoApiService Api
 
-<h1>Blazor 儀表板</h1>
-<p>這是替代前端，與 React 同樣透過 Gateway 存取 API。</p>
-
-<div class="stats-grid">
-    <article>
-        <h4>使用者總數</h4>
-        <strong>@users.Count</strong>
-    </article>
-    <article>
-        <h4>訂單總數</h4>
-        <strong>@orders.Count</strong>
-    </article>
-    <article>
-        <h4>待確認</h4>
-        <strong>@orders.Count(x => x.Status == "待確認")</strong>
-    </article>
-    <article>
-        <h4>已完成</h4>
-        <strong>@orders.Count(x => x.Status == "已完成")</strong>
-    </article>
+<div class="page-header">
+    <h2>儀表板</h2>
+    <p>今日便當訂餐概覽</p>
 </div>
 
-<button @onclick="LoadAsync">重新整理</button>
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-label">使用者總數</div>
+        <div class="stat-value">@users.Count</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">訂單總數</div>
+        <div class="stat-value">@orders.Count</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">待確認</div>
+        <div class="stat-value">@orders.Count(x => x.Status == "待確認")</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">已完成</div>
+        <div class="stat-value">@orders.Count(x => x.Status == "已完成")</div>
+    </div>
+</div>
+
+<div class="section-header">
+    <h3 class="section-title">最近訂單</h3>
+    <button class="btn btn-ghost btn-sm" @onclick="LoadAsync">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/>
+            <path d="M3 21v-5h5"/>
+        </svg>
+        重新整理
+    </button>
+</div>
+
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>訂購人</th>
+                <th>金額</th>
+                <th>狀態</th>
+                <th>時間</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (orders.Count == 0)
+            {
+                <tr class="empty-row"><td colspan="5">目前沒有訂單</td></tr>
+            }
+            else
+            {
+                @foreach (var order in orders.Take(10))
+                {
+                    <tr>
+                        <td class="td-muted">@order.Id</td>
+                        <td class="td-strong">@(order.UserName ?? $"#{order.UserId}")</td>
+                        <td>NT$&nbsp;@order.TotalAmount.ToString("N0")</td>
+                        <td><span class="badge @StatusClass(order.Status)">@order.Status</span></td>
+                        <td class="td-muted">@order.OrderedAt.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
 
 @code {
     private List<UserDto> users = new();
     private List<OrderDto> orders = new();
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAsync();
-    }
+    protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
-        users = await Api.GetUsersAsync();
+        users  = await Api.GetUsersAsync();
         orders = await Api.GetOrdersAsync();
     }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "待確認" => "badge-pending",
+        "製作中" => "badge-making",
+        "已完成" => "badge-done",
+        "已取消" => "badge-cancelled",
+        _        => ""
+    };
 }
