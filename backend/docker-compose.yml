@@ -17,6 +17,7 @@ services:
       Mongo__ConnectionString: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:${MONGO_PORT:-27017}
       Mongo__Database: ${MONGO_DATABASE:-bento_logs}
       Mongo__OrderCollection: ${MONGO_ORDER_COLLECTION:-order_logs}
+      Cache__AdminApiKey: ${CACHE_ADMIN_API_KEY:-}
       Cors__AllowedOrigins__0: ${CORS_ORIGIN_REACT:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${CORS_ORIGIN_BLAZOR:-http://localhost:3001}
       Cors__AllowedOrigins__2: ${CORS_ORIGIN_NGINX:-http://localhost}
