@@ -1,138 +1,180 @@
 @page "/order"
 @inject BentoApiService Api
 
-<h1>訂單頁面</h1>
-<p>建立訂單並更新狀態（待確認/製作中/已完成/已取消）。</p>
-
-<div class="order-section">
-    <label>訂購人</label>
-    <select @bind="selectedUserId">
-        @foreach (var user in users)
-        {
-            <option value="@user.Id">@user.Name（@user.Email）</option>
-        }
-    </select>
-
-    <h3>選擇品項</h3>
-    @foreach (var item in menu.Where(x => x.IsAvailable))
-    {
-        <div class="line-item">
-            <span>@item.Name (NT$ @item.Price)</span>
-            <input type="number" min="0" max="20" value="@GetQuantity(item.Id)" @oninput="(e => OnQuantityChanged(item.Id, e.Value?.ToString()))" />
-        </div>
-    }
-
-    <button @onclick="CreateOrderAsync">建立訂單</button>
+<div class="page-header">
+    <h2>訂單管理</h2>
+    <p>建立訂單並追蹤處理狀態</p>
 </div>
 
-<h3>訂單列表</h3>
-<table>
-    <thead>
-        <tr>
-            <th>編號</th>
-            <th>使用者</th>
-            <th>總額</th>
-            <th>狀態</th>
-            <th>更新</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var order in orders)
-        {
-            <tr>
-                <td>@order.Id</td>
-                <td>@(order.UserName ?? $"#{order.UserId}")</td>
-                <td>NT$ @order.TotalAmount</td>
-                <td>@order.Status</td>
-                <td>
-                    <select @bind="order.Status" @bind:after="() => UpdateOrderStatusAsync(order.Id, order.Status)">
-                        <option value="待確認">待確認</option>
-                        <option value="製作中">製作中</option>
-                        <option value="已完成">已完成</option>
-                        <option value="已取消">已取消</option>
-                    </select>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+<div class="order-layout">
 
-@if (!string.IsNullOrWhiteSpace(message))
-{
-    <p>@message</p>
-}
+    <!-- 左側：建立訂單表單 -->
+    <div>
+        <div class="section-header" style="margin-bottom:10px">
+            <h3 class="section-title">建立新訂單</h3>
+        </div>
+        <div class="form-card">
+            <div class="form-card-title">填寫訂單資訊</div>
+
+            <div class="form-group">
+                <label class="form-label">訂購人</label>
+                <select class="form-control" @bind="selectedUserId">
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.Name（@user.Email）</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">品項與數量</label>
+                <div class="menu-items-list">
+                    @foreach (var item in menu.Where(x => x.IsAvailable))
+                    {
+                        <div class="menu-pick-row">
+                            <div>
+                                <div class="menu-pick-name">@item.Name</div>
+                                <div class="menu-pick-price">NT$&nbsp;@item.Price.ToString("N0")</div>
+                            </div>
+                            <input type="number"
+                                   class="qty-input"
+                                   min="0" max="20"
+                                   value="@GetQuantity(item.Id)"
+                                   @oninput="e => OnQtyChanged(item.Id, e.Value?.ToString())" />
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-full" @onclick="CreateOrderAsync">建立訂單</button>
+
+            @if (!string.IsNullOrWhiteSpace(message))
+            {
+                <div class="toast">@message</div>
+            }
+        </div>
+    </div>
+
+    <!-- 右側：訂單列表 -->
+    <div>
+        <div class="section-header">
+            <h3 class="section-title">訂單列表</h3>
+            <button class="btn btn-ghost btn-sm" @onclick="LoadAsync">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/>
+                    <path d="M21 3v5h-5"/>
+                    <path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/>
+                    <path d="M3 21v-5h5"/>
+                </svg>
+                重新整理
+            </button>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>訂購人</th>
+                        <th>金額</th>
+                        <th>狀態</th>
+                        <th>變更狀態</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (orders.Count == 0)
+                    {
+                        <tr class="empty-row"><td colspan="5">目前沒有訂單</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var order in orders)
+                        {
+                            <tr>
+                                <td class="td-muted">@order.Id</td>
+                                <td class="td-strong">@(order.UserName ?? $"#{order.UserId}")</td>
+                                <td>NT$&nbsp;@order.TotalAmount.ToString("N0")</td>
+                                <td><span class="badge @StatusClass(order.Status)">@order.Status</span></td>
+                                <td>
+                                    <select class="status-select"
+                                            @bind="order.Status"
+                                            @bind:after="() => UpdateStatusAsync(order.Id, order.Status)">
+                                        <option value="待確認">待確認</option>
+                                        <option value="製作中">製作中</option>
+                                        <option value="已完成">已完成</option>
+                                        <option value="已取消">已取消</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
 
 @code {
-    private List<UserDto> users = new();
-    private List<MenuItemDto> menu = new();
-    private List<OrderDto> orders = new();
-    private int selectedUserId;
+    private List<UserDto>     users    = new();
+    private List<MenuItemDto> menu     = new();
+    private List<OrderDto>    orders   = new();
+    private int               selectedUserId;
     private readonly Dictionary<int, int> quantities = new();
     private string? message;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAsync();
-    }
+    protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
-        users = await Api.GetUsersAsync();
-        menu = await Api.GetMenuAsync();
+        users  = await Api.GetUsersAsync();
+        menu   = await Api.GetMenuAsync();
         orders = await Api.GetOrdersAsync();
 
         if (selectedUserId <= 0 && users.Count > 0)
-        {
             selectedUserId = users[0].Id;
-        }
     }
 
-    private int GetQuantity(int menuItemId)
-    {
-        return quantities.TryGetValue(menuItemId, out var value) ? value : 0;
-    }
+    private int GetQuantity(int id) =>
+        quantities.TryGetValue(id, out var v) ? v : 0;
 
-    private void OnQuantityChanged(int menuItemId, string? rawValue)
+    private void OnQtyChanged(int id, string? raw)
     {
-        if (!int.TryParse(rawValue, out var quantity))
-        {
-            quantity = 0;
-        }
-
-        quantities[menuItemId] = Math.Max(0, quantity);
+        quantities[id] = int.TryParse(raw, out var q) ? Math.Max(0, q) : 0;
     }
 
     private async Task CreateOrderAsync()
     {
         var items = quantities
             .Where(x => x.Value > 0)
-            .Select(x => new CreateOrderItemRequest
-            {
-                MenuItemId = x.Key,
-                Quantity = x.Value
-            })
+            .Select(x => new CreateOrderItemRequest { MenuItemId = x.Key, Quantity = x.Value })
             .ToList();
 
         if (selectedUserId <= 0 || items.Count == 0)
         {
-            message = "請先選擇訂購人並填寫至少一個品項數量。";
+            message = "請先選擇訂購人，並填寫至少一個品項數量。";
             return;
         }
 
-        await Api.CreateOrderAsync(new CreateOrderRequest
-        {
-            UserId = selectedUserId,
-            Items = items
-        });
+        await Api.CreateOrderAsync(new CreateOrderRequest { UserId = selectedUserId, Items = items });
 
         message = "訂單已建立。";
         quantities.Clear();
         await LoadAsync();
     }
 
-    private async Task UpdateOrderStatusAsync(int orderId, string status)
+    private async Task UpdateStatusAsync(int orderId, string status)
     {
         await Api.UpdateOrderStatusAsync(orderId, status);
         await LoadAsync();
     }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "待確認" => "badge-pending",
+        "製作中" => "badge-making",
+        "已完成" => "badge-done",
+        "已取消" => "badge-cancelled",
+        _        => ""
+    };
 }
