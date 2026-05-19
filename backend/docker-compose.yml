@@ -23,11 +23,15 @@ services:
       Cors__AllowedOrigins__2: ${CORS_ORIGIN_NGINX:-http://localhost}
     ports:
       - "${BENTO_API_PORT:-5050}:5050"
+    # 課程重點：service_healthy 確保 postgres 完全就緒後 API 才啟動；
+    # redis 與 rabbitmq 啟動快，且 API 有 Outbox 重試機制，用 service_started 即可。
     depends_on:
-      - postgres
-      - mongo
-      - redis
-      - rabbitmq
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
     networks:
       - bento-network
     # --- 安全性設定 ---
@@ -38,7 +42,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.50"           # 限制 CPU 使用，防止單容器耗盡資源
+          cpus: "0.50"
           memory: 512M
 
   bento-gateway:
@@ -55,7 +59,6 @@ services:
       - bento-api
     networks:
       - bento-network
-    # --- 安全性設定 ---
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -86,49 +89,11 @@ services:
         limits:
           cpus: "0.50"
           memory: 512M
-
-  mssql:
-    container_name: ${MSSQL_CONTAINER_NAME:-mssql}
-    image: ${MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
-    environment:
-      ACCEPT_EULA: ${MSSQL_ACCEPT_EULA:-Y}
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
-      MSSQL_PID: ${MSSQL_PID:-Developer}
-    ports:
-      - "${MSSQL_PORT:-1433}:1433"
-    volumes:
-      - mssql_data:/var/opt/mssql
-    networks:
-      - bento-network
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 2G             # SQL Server 最低需求約 2GB
-
-  mariadb:
-    container_name: ${MARIADB_CONTAINER_NAME:-mariadb}
-    image: ${MARIADB_IMAGE:-mariadb:11}
-    environment:
-      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
-      MARIADB_DATABASE: ${MARIADB_DATABASE:-bentodb}
-      MARIADB_USER: ${MARIADB_USER:-bento}
-      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
-    ports:
-      - "${MARIADB_PORT:-3306}:3306"
-    volumes:
-      - mariadb_data:/var/lib/mysql
-    networks:
-      - bento-network
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bento}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   mongo:
     container_name: ${MONGO_CONTAINER_NAME:-mongo}
@@ -193,8 +158,6 @@ services:
 
 volumes:
   postgres_data:
-  mssql_data:
-  mariadb_data:
   mongo_data:
   redis_data:
   rabbitmq_data:

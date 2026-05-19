@@ -1,0 +1,58 @@
+# docker-compose.alternatives.yml
+#
+# 課程補充：MSSQL 與 MariaDB 作為 PostgreSQL 的替代資料庫選項。
+# 此檔案不會被根目錄的 docker compose up 自動載入。
+#
+# 課程重點：.NET EF Core 支援多種資料庫，
+# 只需更換 Connection String 與對應的 NuGet 套件即可切換：
+#   PostgreSQL → Npgsql.EntityFrameworkCore.PostgreSQL
+#   SQL Server → Microsoft.EntityFrameworkCore.SqlServer
+#   MySQL/MariaDB → Pomelo.EntityFrameworkCore.MySql
+#
+# 啟動特定替代資料庫（不影響主要服務）：
+#   docker compose -f docker-compose.alternatives.yml up mssql -d
+#   docker compose -f docker-compose.alternatives.yml up mariadb -d
+
+services:
+  mssql:
+    container_name: ${MSSQL_CONTAINER_NAME:-mssql}
+    image: ${MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
+    environment:
+      ACCEPT_EULA: ${MSSQL_ACCEPT_EULA:-Y}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Your_strong_password_123}
+      MSSQL_PID: ${MSSQL_PID:-Developer}
+    ports:
+      - "${MSSQL_PORT:-1433}:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 2G    # SQL Server 最低需求約 2GB
+
+  mariadb:
+    container_name: ${MARIADB_CONTAINER_NAME:-mariadb}
+    image: ${MARIADB_IMAGE:-mariadb:11}
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-bento_mariadb_root}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-bentodb}
+      MARIADB_USER: ${MARIADB_USER:-bento}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-bento_mariadb}
+    ports:
+      - "${MARIADB_PORT:-3306}:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
+volumes:
+  mssql_data:
+  mariadb_data:

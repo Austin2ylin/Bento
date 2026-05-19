@@ -1,0 +1,32 @@
+# HorizontalPodAutoscaler — API 自動水平擴展
+#
+# 前置條件：
+#   minikube：minikube addons enable metrics-server
+#   其他叢集：確認已安裝 metrics-server
+#
+# 課程重點：
+# - minReplicas: API 至少保持 2 個 Pod（避免單點故障）
+# - maxReplicas: 最多自動擴展到 5 個 Pod
+# - CPU 平均使用率超過 70% 時，K8s 自動新增 Pod
+# - 負載下降後自動縮減，無需人工介入
+# - Deployment 需設定 resources.requests 才能讓 HPA 計算使用率百分比
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bento-api-hpa
+  namespace: bento
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bento-api
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
