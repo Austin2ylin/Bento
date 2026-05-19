@@ -1,6 +1,9 @@
 # Environment
 .env
 
+# Kubernetes Secrets（含明文密碼，絕對不能 commit）
+k8s/secret.yaml
+
 # .NET
 bin/
 obj/

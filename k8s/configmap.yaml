@@ -3,30 +3,39 @@ kind: ConfigMap
 metadata:
   name: bento-app-config
   namespace: bento
+# 課程重點：ConfigMap 只放非敏感設定。
+# 密碼、API Key、含密碼的 Connection String → 改放 k8s/secret.yaml
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
-  ConnectionStrings__PostgreSql: "Host=postgres;Port=5432;Database=bentodb;Username=bento;Password=bento123"
-  Redis__ConnectionString: "redis:6379,password=redis123"
+
+  # RabbitMQ（guest/guest 為官方預設開發帳號，生產環境請改為 Secret）
   RabbitMq__Host: "rabbitmq"
   RabbitMq__Port: "5672"
   RabbitMq__UserName: "guest"
   RabbitMq__Password: "guest"
   RabbitMq__QueueName: "order-created"
-  Mongo__ConnectionString: "mongodb://bento:bento123@mongo:27017"
+
+  # MongoDB 非敏感設定
   Mongo__Database: "bento_logs"
   Mongo__OrderCollection: "order_logs"
-  Cache__AdminApiKey: "replace-with-a-long-random-value"
+
+  # CORS 允許來源
   Cors__AllowedOrigins__0: "http://localhost:3000"
   Cors__AllowedOrigins__1: "http://localhost:3001"
   Cors__AllowedOrigins__2: "http://localhost"
+
+  # PostgreSQL 非敏感設定（供 StatefulSet 使用）
   POSTGRES_USER: "bento"
-  POSTGRES_PASSWORD: "bento123"
   POSTGRES_DB: "bentodb"
+
+  # MongoDB 非敏感設定（供 StatefulSet 使用）
   MONGO_INITDB_ROOT_USERNAME: "bento"
-  MONGO_INITDB_ROOT_PASSWORD: "bento123"
-  REDIS_PASSWORD: "redis123"
+
+  # RabbitMQ 非敏感設定（供 Deployment 使用）
   RABBITMQ_DEFAULT_USER: "guest"
   RABBITMQ_DEFAULT_PASS: "guest"
+
+  # Blazor Server Gateway 位址（容器內部網路）
   Gateway__BaseUrl: "http://bento-gateway:5000/gateway"
 ---
 apiVersion: v1
