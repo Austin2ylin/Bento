@@ -1,150 +1,123 @@
 # Bento 便當訂餐系統
 
-以 .NET 8 Web API 為後端的便當訂餐示範專案，涵蓋 RESTful API、EF Core Code-First、DTO 分層、Redis 快取、RabbitMQ、MongoDB、Docker Compose、Kubernetes、React 與 Blazor。
+以 .NET 8 Web API 為核心的便當訂餐示範專案，涵蓋微服務架構、EF Core Code-First、Outbox Pattern、Redis Cache-Aside、RabbitMQ、MongoDB、YARP Gateway、React 18、Blazor Server、Docker Compose、Kubernetes 與 Jenkins CI/CD。
 
-## 功能與教材重點
+---
 
-- 使用者、菜單、訂單 API，採 RESTful plural routes。
-- Controller 不直接回傳 EF Entity，透過 request/response models 控制 API contract。
-- `OrderService` 承接訂單建立與狀態更新邏輯，避免 Controller 過胖。
-- EF Core Code-First 建立 PostgreSQL 主資料表與 `outbox_messages`。
-- 建立訂單時先寫 PostgreSQL 與 outbox，再由背景服務重試派送 RabbitMQ 與 MongoDB log。
-- Redis 快取菜單清單，新增、更新、刪除菜單時會清除快取。
-- 快取清除 API 受 `X-Cache-Admin-Key` 保護。
-- React 18 + TypeScript 與 Blazor Server 皆透過 Gateway 呼叫 API。
-- Docker Compose 與 Kubernetes 提供容器化部署範例。
+## 架構總覽
+
+```
+瀏覽器
+  │
+  ├── :3000  React SPA (bento-client, nginx-unprivileged :8080)
+  ├── :3001  Blazor Server (bento-blazor)
+  │
+  :80  NGINX (反向代理 + WebSocket 升級，輪流分發給兩個前端)
+  │
+  :5000  YARP Gateway (bento-gateway)  ← /gateway/* → /api/*
+  │
+  :5050  Bento API (bento-api)
+     │
+     ├── PostgreSQL :5432   主資料庫 (users / menu_items / orders / order_items / outbox_messages)
+     ├── Redis      :6379   菜單快取 (Cache-Aside, TTL 10 分鐘)
+     ├── RabbitMQ   :5672   非同步訂單事件佇列 (order-created)
+     └── MongoDB    :27017  訂單事件 Log (schema-less BsonDocument)
+```
+
+**Outbox Pattern 流程：**
+
+```
+POST /api/orders
+  → OrderService 驗證使用者與菜單
+  → 同一個 PostgreSQL transaction：
+      寫入 orders / order_items
+      寫入 outbox_messages (x2：rabbitmq + mongo-log)
+  → OutboxDispatcherService 每 5 秒輪詢
+      → 推送 RabbitMQ  (order-created:rabbitmq)
+      → 寫入 MongoDB   (order-created:mongo-log)
+      → 失敗時指數退避重試，最長間隔 300 秒
+```
+
+---
 
 ## 技術堆疊
 
-- .NET 8 Web API
-- Entity Framework Core 8 + PostgreSQL
-- FluentValidation
-- Redis
-- RabbitMQ
-- MongoDB
-- YARP Gateway
-- React 18 + TypeScript + Vite + Axios
-- Blazor Server
-- Docker Compose / Kubernetes / NGINX / Jenkins
+| 層級 | 技術 |
+|------|------|
+| API | .NET 8 Web API、EF Core 8、FluentValidation、YARP |
+| 資料庫 | PostgreSQL 16、Redis 7、RabbitMQ 3、MongoDB 7 |
+| 前端 | React 18 + TypeScript + Vite + Axios |
+| 前端 (管理) | Blazor Server (.NET 8) |
+| 容器 | Docker Compose (modular `include:`)、NGINX |
+| CI/CD | Jenkins (Jenkinsfile)、Docker Hub |
+| 部署 | Kubernetes (minikube / 任意叢集)、Render |
+
+---
 
 ## 專案結構
 
-```text
+```
 Bento/
-├── docker-compose.yml
-├── .env.example
+├── docker-compose.yml                  # 主入口，include 三個子檔
+├── docker-compose.alternatives.yml     # MSSQL / MariaDB 替代方案
+├── render.yaml                         # Render 雲端部署設定
+├── .env.example                        # 環境變數範本（複製為 .env）
+│
 ├── backend/
+│   ├── docker-compose.yml              # bento-api、bento-gateway、postgres、mongo、redis、rabbitmq
 │   ├── Bento.Api/
-│   │   ├── Constants/
-│   │   │   ├── CacheKeys.cs
-│   │   │   ├── OrderStatuses.cs
-│   │   │   └── OutboxMessageTypes.cs
-│   │   ├── Controllers/
-│   │   │   ├── CacheController.cs
-│   │   │   ├── MenuController.cs
-│   │   │   ├── OrderController.cs
-│   │   │   └── UserController.cs
-│   │   ├── Data/
-│   │   │   ├── BentoDbContext.cs
-│   │   │   ├── BentoDbContextFactory.cs
-│   │   │   └── Migrations/
-│   │   ├── Models/
-│   │   │   ├── MenuItem.cs
-│   │   │   ├── Order.cs
-│   │   │   ├── OrderItem.cs
-│   │   │   ├── OutboxMessage.cs
-│   │   │   ├── Requests.cs
-│   │   │   ├── Responses.cs
-│   │   │   └── User.cs
-│   │   ├── Services/
-│   │   │   ├── MongoService.cs
-│   │   │   ├── OrderService.cs
-│   │   │   ├── OutboxDispatcherService.cs
-│   │   │   ├── RabbitMqService.cs
-│   │   │   └── RedisService.cs
-│   │   ├── Validators/
-│   │   │   └── OrderValidator.cs
+│   │   ├── Controllers/                # UsersController、MenusController、OrdersController、CacheController
+│   │   ├── Services/                   # OrderService、OutboxDispatcherService、RedisService、RabbitMqService、MongoService
+│   │   ├── Data/                       # BentoDbContext、BentoDbContextFactory、Migrations/
+│   │   ├── Models/                     # Entities、Requests.cs、Responses.cs
+│   │   ├── Validators/                 # OrderValidator (FluentValidation)
+│   │   ├── Constants/                  # OrderStatuses、CacheKeys、OutboxMessageTypes
+│   │   ├── Examples/                   # DatabaseFirstExample.cs（DB-First 參考）
 │   │   └── Program.cs
-│   ├── Bento.Gateway/
-│   └── docker-compose.yml
+│   └── Bento.Gateway/
+│       ├── appsettings.json            # YARP 路由：/gateway/{**catch-all} → bento-api:5050
+│       └── Program.cs
+│
 ├── frontend/
-│   ├── bento-client/
-│   │   ├── .npmrc.example
+│   ├── docker-compose.yml              # bento-client、bento-blazor
+│   ├── bento-client/                   # React 18 + TypeScript + Vite
 │   │   ├── src/
-│   │   └── Dockerfile
-│   ├── bento-blazor/
-│   └── docker-compose.yml
+│   │   │   ├── api/bentoApi.ts         # Axios 封裝，呼叫 Gateway
+│   │   │   ├── pages/                  # DashboardPage、MenuPage、OrderPage
+│   │   │   └── types.ts
+│   │   └── nginx.conf                  # SPA fallback，監聽 8080（nginx-unprivileged）
+│   └── bento-blazor/                   # Blazor Server
+│       ├── Pages/                      # Index.razor、Menu.razor、Order.razor
+│       └── Services/BentoApiService.cs # HttpClient 封裝，呼叫 Gateway
+│
 ├── infra/
+│   ├── docker-compose.yml              # nginx、jenkins
+│   ├── nginx/nginx.conf                # upstream bento_frontends（client:8080 + blazor:3001）
+│   └── jenkins/
+│       ├── Dockerfile
+│       └── Jenkinsfile                 # build → test → docker build → docker push
+│
 └── k8s/
+    ├── namespace.yaml
+    ├── configmap.yaml                  # bento-app-config、bento-nginx-config
+    ├── secret.yaml.example             # 複製為 secret.yaml，填入 base64 值
+    ├── api-deployment.yaml             # replicas: 2、readinessProbe、livenessProbe
+    ├── gateway-deployment.yaml
+    ├── frontend-deployment.yaml        # React (nginx-unprivileged, port 8080)
+    ├── blazor-deployment.yaml
+    ├── nginx-deployment.yaml           # type: LoadBalancer
+    ├── postgres-statefulset.yaml       # Headless Service + PVC 5Gi
+    ├── mongo-statefulset.yaml          # Headless Service + PVC 5Gi
+    ├── redis-deployment.yaml
+    ├── rabbitmq-deployment.yaml
+    └── hpa.yaml                        # bento-api：min 2、max 5、CPU 70%
 ```
 
-目前 Entity、Request、Response 都放在 `Models/`。這已經避免直接回傳 Entity，但如果教材要求更嚴格的分層，可以再拆成 `Models/Entities`、`Contracts/Requests`、`Contracts/Responses`。
+---
 
-## 資料模型與流程
+## 快速啟動（Docker Compose）
 
-主要關聯：
-
-```text
-User 1 --- * Order 1 --- * OrderItem * --- 1 MenuItem
-```
-
-建立訂單流程：
-
-```text
-POST /api/orders
-  -> OrderService 驗證 user/menu
-  -> 寫入 orders / order_items
-  -> 同一個 DB transaction 寫入 outbox_messages
-  -> OutboxDispatcherService 背景輪詢
-  -> 成功派送 RabbitMQ order-created
-  -> 成功寫入 MongoDB order log
-```
-
-這樣 RabbitMQ 或 MongoDB 暫時失敗時，事件不會直接遺失，而是保留在 `outbox_messages` 等待重試。
-
-## API 端點
-
-直接打 API：
-
-```text
-GET    /api/menus
-GET    /api/menus/{id}
-POST   /api/menus
-PUT    /api/menus/{id}
-DELETE /api/menus/{id}
-
-GET    /api/orders
-GET    /api/orders/{id}
-POST   /api/orders
-PATCH  /api/orders/{id}/status
-
-GET    /api/users
-GET    /api/users/{id}
-POST   /api/users
-
-GET    /api/cache/menu
-DELETE /api/cache/menu
-```
-
-前端通常透過 Gateway 呼叫，所以實際 URL 會是：
-
-```text
-http://localhost:5000/gateway/api/menus
-http://localhost:5000/gateway/api/orders
-http://localhost:5000/gateway/api/users
-```
-
-`DELETE /api/cache/menu` 需要 header：
-
-```text
-X-Cache-Admin-Key: <你的 CACHE_ADMIN_API_KEY>
-```
-
-Development 環境若沒有設定 `Cache:AdminApiKey`，後端會允許清除快取；Production 或有設定 key 時必須帶正確 header。
-
-## 必填設定
-
-先複製環境檔：
+### 1. 建立環境設定
 
 ```bash
 cp .env.example .env
@@ -156,7 +129,9 @@ Windows PowerShell：
 Copy-Item .env.example .env
 ```
 
-請至少修改 `.env` 裡這些值：
+### 2. 填入必填值
+
+開啟 `.env`，至少修改以下五個變數：
 
 ```env
 POSTGRES_PASSWORD=your_postgres_password
@@ -166,70 +141,56 @@ CACHE_ADMIN_API_KEY=replace_with_a_long_random_value
 VITE_BENTO_CACHE_ADMIN_KEY=replace_with_the_same_value_as_CACHE_ADMIN_API_KEY
 ```
 
-建議值：
-
-- `POSTGRES_PASSWORD`：PostgreSQL 密碼，例如 `bento_postgres_12345`
-- `MONGO_INITDB_ROOT_PASSWORD`：MongoDB root 密碼，例如 `bento_mongo_12345`
-- `REDIS_PASSWORD`：Redis 密碼，例如 `bento_redis_12345`
-- `CACHE_ADMIN_API_KEY`：快取管理 API key，請用長隨機字串
-- `VITE_BENTO_CACHE_ADMIN_KEY`：React build-time 設定，填同一個快取管理 key
-
 產生隨機 key：
 
 ```bash
 openssl rand -base64 32
 ```
 
-Windows PowerShell 可用：
+Windows PowerShell：
 
 ```powershell
 [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
 ```
 
-如果你的公司電腦有 proxy，需要自行建立本機 npm 設定：
+> `CACHE_ADMIN_API_KEY` 與 `VITE_BENTO_CACHE_ADMIN_KEY` 必須填入**相同的值**。前者是 API 端驗證用，後者是 React build-time 注入，呼叫 `DELETE /api/cache/menu` 時附在 `X-Cache-Admin-Key` Header。
 
-```bash
-cd frontend/bento-client
-cp .npmrc.example .npmrc
-```
-
-Windows PowerShell：
-
-```powershell
-cd frontend/bento-client
-Copy-Item .npmrc.example .npmrc
-```
-
-然後在 `.npmrc` 填公司 proxy。不要提交 `.npmrc`，因為裡面可能有帳密，`.gitignore` 已排除它。
-
-## Docker 啟動
+### 3. 啟動所有服務
 
 ```bash
 docker compose up -d --build
+```
+
+Migration 已在 API 啟動時自動執行（`Program.cs` 呼叫 `db.Database.Migrate()`），不需要額外手動執行。
+
+若需要手動套用（例如 container 重啟後）：
+
+```bash
 docker exec -it bento-api dotnet ef database update
 ```
 
-常用網址：
+### 服務位址
 
-| 服務 | 網址 |
-| --- | --- |
-| React 前端 | http://localhost:3000 |
-| Blazor 前端 | http://localhost:3001 |
-| Swagger UI | http://localhost:5050/swagger |
-| API Gateway | http://localhost:5000 |
-| RabbitMQ 管理介面 | http://localhost:15672 |
-| Jenkins | http://localhost:8080 |
+| 服務 | 網址 | 說明 |
+|------|------|------|
+| React 前端 | http://localhost:3000 | Vite 打包後由 nginx-unprivileged 服務 |
+| Blazor 前端 | http://localhost:3001 | Blazor Server，含 SignalR |
+| NGINX | http://localhost:80 | 反向代理，輪流分發兩個前端 |
+| Swagger UI | http://localhost:5050/swagger | API 文件與測試介面 |
+| Bento API | http://localhost:5050 | 直接打 API |
+| API Gateway | http://localhost:5000 | 通常透過 `/gateway` 前綴使用 |
+| RabbitMQ 管理 | http://localhost:15672 | 帳密取自 `.env` 的 `RABBITMQ_DEFAULT_USER/PASS` |
+| Jenkins | http://localhost:8080 | CI/CD 管理介面 |
 
-RabbitMQ 帳密取自 `.env`：
+> 初次啟動 Jenkins 需要從容器 log 取得初始密碼：`docker logs jenkins`
 
-```env
-RABBITMQ_DEFAULT_USER=guest
-RABBITMQ_DEFAULT_PASS=guest
-```
+---
 
-## 手動啟動
+## 本機開發（不用 Docker）
 
-後端：
+執行前需有本機或外部的 PostgreSQL、Redis、RabbitMQ、MongoDB 服務，並在 `backend/Bento.Api/appsettings.Development.json` 填入對應的連線字串。
+
+**API：**
 
 ```bash
 cd backend/Bento.Api
@@ -237,30 +198,142 @@ dotnet ef database update
 dotnet run --urls "http://0.0.0.0:5050"
 ```
 
-Gateway：
+**Gateway：**
 
 ```bash
 cd backend/Bento.Gateway
 dotnet run --urls "http://0.0.0.0:5000"
 ```
 
-React：
+**React：**
 
 ```bash
 cd frontend/bento-client
+cp .npmrc.example .npmrc   # 企業網路 proxy 才需要
 npm ci
-npm run build
 npm run dev
 ```
 
-Blazor：
+**Blazor：**
 
 ```bash
 cd frontend/bento-blazor
 dotnet run --urls "http://0.0.0.0:3001"
 ```
 
+---
+
+## API 端點
+
+前端通常透過 Gateway 呼叫（`:5000/gateway/api/...`），也可以直接打 API（`:5050/api/...`）。
+
+### 使用者
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| `GET` | `/api/users` | 取得全部使用者 |
+| `GET` | `/api/users/{id}` | 取得單一使用者 |
+| `POST` | `/api/users` | 建立使用者（Email 唯一） |
+
+**POST /api/users 請求範例：**
+
+```json
+{
+  "name": "王小明",
+  "email": "ming@example.com"
+}
+```
+
+### 菜單
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| `GET` | `/api/menus` | 取得全部菜單（Redis 快取 10 分鐘） |
+| `GET` | `/api/menus/{id}` | 取得單一菜單項目 |
+| `POST` | `/api/menus` | 新增菜單（同時清除 Redis 快取） |
+| `PUT` | `/api/menus/{id}` | 更新菜單（同時清除 Redis 快取） |
+| `DELETE` | `/api/menus/{id}` | 刪除菜單（同時清除 Redis 快取） |
+
+Migration 預設種入 4 筆菜單資料：排骨便當 $110、雞腿便當 $120、鯖魚便當 $130、素食便當 $100。
+
+### 訂單
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| `GET` | `/api/orders` | 取得全部訂單（含使用者、品項） |
+| `GET` | `/api/orders/{id}` | 取得單一訂單 |
+| `POST` | `/api/orders` | 建立訂單（觸發 Outbox） |
+| `PATCH` | `/api/orders/{id}/status` | 更新訂單狀態 |
+
+**POST /api/orders 請求範例：**
+
+```json
+{
+  "userId": 1,
+  "items": [
+    { "menuItemId": 1, "quantity": 2 },
+    { "menuItemId": 3, "quantity": 1 }
+  ]
+}
+```
+
+**訂單狀態（PATCH）允許值：**`待確認`、`製作中`、`已完成`、`已取消`
+
+**驗證規則（FluentValidation）：**
+
+- `userId` > 0
+- `items` 不可為空
+- 同一個 `menuItemId` 不可重複
+- 單一品項數量：1 ～ 20
+- 全部品項總數量 ≤ 50
+
+### 快取管理
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| `GET` | `/api/cache/menu` | 查看快取狀態（回傳 `source: redis\|database`） |
+| `DELETE` | `/api/cache/menu` | 強制清除菜單快取（需要 Header） |
+
+`DELETE /api/cache/menu` 需要攜帶：
+
+```
+X-Cache-Admin-Key: <你的 CACHE_ADMIN_API_KEY>
+```
+
+> Development 環境若未設定 `Cache:AdminApiKey`，允許無 Header 清除。Production 環境若未設定則拒絕所有請求。
+
+---
+
+## 資料模型
+
+```
+users
+  id, name, email(唯一), created_at
+
+menu_items
+  id, name, price(18,2), is_available, updated_at
+
+orders
+  id, user_id → users.id (CASCADE), status(20), total_amount(18,2), ordered_at
+
+order_items
+  PK(order_id, menu_item_id)
+  order_id  → orders.id    (CASCADE)
+  menu_item_id → menu_items.id (RESTRICT)
+  quantity, unit_price(18,2)
+
+outbox_messages
+  id(GUID), type(120), aggregate_id(order.id)
+  created_at, processed_at(null=未處理)
+  attempt_count, next_attempt_at, last_error(1000)
+  Index: (processed_at, next_attempt_at)、aggregate_id
+```
+
+---
+
 ## EF Core Migration
+
+新增 migration：
 
 ```bash
 cd backend/Bento.Api
@@ -268,85 +341,160 @@ dotnet ef migrations add <MigrationName> --output-dir Data/Migrations
 dotnet ef database update
 ```
 
-Docker container 內套用：
+Container 內套用：
 
 ```bash
 docker exec -it bento-api dotnet ef database update
 ```
 
-目前 migration 會建立：
+---
 
-- `users`
-- `menu_items`
-- `orders`
-- `order_items`
-- `outbox_messages`
+## 替代資料庫
 
-## Kubernetes 注意事項
-
-`k8s/configmap.yaml` 目前是課程示範用。正式環境不應把密碼與 API key 放 ConfigMap，應改用 Kubernetes Secret。
-
-Production 必須設定 CORS：
-
-```yaml
-Cors__AllowedOrigins__0: "http://localhost:3000"
-Cors__AllowedOrigins__1: "http://localhost:3001"
-Cors__AllowedOrigins__2: "http://localhost"
-```
-
-React container 使用 `nginx-unprivileged`，container port 是 `8080`，Kubernetes service targetPort 也要是 `8080`。
-
-## 公司 Windows 電腦執行
-
-可以跑，建議使用：
-
-- Windows 10/11
-- Docker Desktop + WSL2 backend
-- Git for Windows
-- .NET 8 SDK
-- Node.js 20 LTS
-- Visual Studio Code
-
-公司環境常見注意事項：
-
-- Docker Desktop 要能拉 Docker Hub image。
-- npm / NuGet 可能需要 proxy。
-- Port 可能被公司軟體占用，尤其 `80`、`1433`、`3000`、`3001`、`5000`、`5050`、`5432`、`6379`、`8080`。
-- 若 port 衝突，改 `.env` 的 `*_PORT` 值。
-- `.npmrc` 只放本機，不要 commit。
-
-Windows PowerShell 啟動：
-
-```powershell
-Copy-Item .env.example .env
-docker compose up -d --build
-docker exec -it bento-api dotnet ef database update
-```
-
-## 驗證指令
+`docker-compose.alternatives.yml` 提供 MSSQL 與 MariaDB，可替換主 PostgreSQL：
 
 ```bash
-dotnet build backend/Bento.Api/Bento.Api.csproj --no-restore
-dotnet build frontend/bento-blazor/bento-blazor.csproj --no-restore
+# 啟動 MSSQL
+docker compose -f docker-compose.alternatives.yml up mssql -d
 
-cd frontend/bento-client
-npm ci
-npm run build
+# 啟動 MariaDB
+docker compose -f docker-compose.alternatives.yml up mariadb -d
 ```
 
-## 安全注意事項
+MSSQL 最低記憶體需求 2 GB，預設為 Developer 版。替換後需修改 `.env` 的連線字串，並更換 EF Core Provider（`Microsoft.EntityFrameworkCore.SqlServer` 或 `Pomelo.EntityFrameworkCore.MySql`）。
 
-- 不要提交 `.env`。
-- 不要提交 `.npmrc`，尤其不能包含 proxy 帳密。
-- `CACHE_ADMIN_API_KEY`、資料庫密碼、Redis 密碼、MongoDB 密碼應每個環境不同。
-- Kubernetes 正式部署請改用 Secret，不要把密碼放 ConfigMap。
+---
 
-## 課程涵蓋主題
+## Kubernetes 部署
 
-Docker 安裝與指令、SQL Server Container、Code-First 一對多與多對多關聯、EF Core Migration、PostgreSQL / MariaDB Container、MongoDB、Redis 快取、自訂驗證與路由限制、CORS 設定、Swagger UI、React 前端 Container、Blazor Server Container、RabbitMQ 非同步訊息、Outbox pattern、Jenkins CI/CD、NGINX Load Balancer、BFF API Gateway、Kubernetes 部署、Pod 水平擴展與容錯。
+Manifests 位於 `k8s/`，Namespace 為 `bento`。
 
-DB-First 與手機端（Xamarin / MAUI）不實作。DB-First 的 scaffold 指令與說明以註解方式保留在 `Examples/DatabaseFirstExample.cs`，供課程講解對比用途。
+### 1. 建立 Namespace
 
-## 授權
+```bash
+kubectl apply -f k8s/namespace.yaml
+```
 
-MIT
+### 2. 建立 Secret
+
+```bash
+cp k8s/secret.yaml.example k8s/secret.yaml
+# 編輯 secret.yaml，將所有 <base64_encoded> 換成實際的 base64 值
+# 產生方式：echo -n "your_value" | base64
+kubectl apply -f k8s/secret.yaml
+```
+
+`secret.yaml` 已加入 `.gitignore`，不會被 commit。需填入的欄位：
+
+| Key | 說明 |
+|-----|------|
+| `ConnectionStrings__PostgreSql` | 完整 Postgres 連線字串 |
+| `POSTGRES_PASSWORD` | Postgres 密碼 |
+| `Redis__ConnectionString` | Redis 連線字串（含密碼） |
+| `REDIS_PASSWORD` | Redis 密碼 |
+| `Mongo__ConnectionString` | MongoDB 連線字串（含密碼） |
+| `MONGO_INITDB_ROOT_PASSWORD` | MongoDB root 密碼 |
+| `Cache__AdminApiKey` | 快取管理 API 金鑰 |
+
+### 3. 建立 ConfigMap
+
+```bash
+kubectl apply -f k8s/configmap.yaml
+```
+
+### 4. 修改 Image 名稱
+
+四個 Deployment 的 `image` 欄位預設為 `your-dockerhub-name/...`，需替換為你的 Docker Hub 帳號：
+
+```bash
+sed -i 's/your-dockerhub-name/<your-username>/g' \
+  k8s/api-deployment.yaml \
+  k8s/blazor-deployment.yaml \
+  k8s/frontend-deployment.yaml \
+  k8s/gateway-deployment.yaml
+```
+
+### 5. 套用所有 Manifests
+
+```bash
+kubectl apply -f k8s/postgres-statefulset.yaml
+kubectl apply -f k8s/mongo-statefulset.yaml
+kubectl apply -f k8s/redis-deployment.yaml
+kubectl apply -f k8s/rabbitmq-deployment.yaml
+kubectl apply -f k8s/api-deployment.yaml
+kubectl apply -f k8s/gateway-deployment.yaml
+kubectl apply -f k8s/frontend-deployment.yaml
+kubectl apply -f k8s/blazor-deployment.yaml
+kubectl apply -f k8s/nginx-deployment.yaml
+kubectl apply -f k8s/hpa.yaml
+```
+
+### HPA
+
+`hpa.yaml` 設定 `bento-api`：最少 2 個 Pod、最多 5 個、CPU 使用率超過 70% 自動擴展。
+
+啟用前須安裝 metrics-server：
+
+```bash
+# minikube
+minikube addons enable metrics-server
+```
+---
+
+## CI/CD（Jenkins）
+
+`infra/jenkins/Jenkinsfile` 定義四個 Stage：
+
+| Stage | 說明 |
+|-------|------|
+| `build` | `dotnet build` 三個 .NET 專案（API、Gateway、Blazor） |
+| `dotnet test` | 自動掃描 `*Tests.csproj`，找不到則跳過 |
+| `docker build` | 建置四個 Image（api、gateway、client、blazor），Tag 為 `BUILD_NUMBER` |
+| `docker push` | 推送到 Docker Hub（需要 `dockerhub` Credential） |
+
+Image 命名規則：`<DOCKERHUB_NAMESPACE>/<service>:<BUILD_NUMBER>`
+
+Jenkins 掛載了宿主機的 `/var/run/docker.sock`，可直接執行 `docker` 命令。
+
+---
+
+## Render 部署
+
+`render.yaml` 定義了 Render 上的完整部署設定：
+
+| 服務 | 類型 | 說明 |
+|------|------|------|
+| `bento-api` | Web Service | 從 Dockerfile 部署，PostgreSQL 連線字串由 Render 自動注入 |
+| `bento-gateway` | Web Service | YARP 設定透過環境變數覆寫 API 位址 |
+| `bento-blazor` | Web Service | Gateway URL 指向 Render 上的 bento-gateway |
+| `bento-client` | Web Service | Build args 注入 `VITE_BENTO_GATEWAY_BASE_URL` |
+| `bento-postgres` | PostgreSQL | Render 托管資料庫（free plan，256 MB） |
+
+Redis、MongoDB、RabbitMQ 不包含在 `render.yaml` 中，需另外使用外部免費服務：
+- Redis：Upstash（10k commands/day）
+- MongoDB：MongoDB Atlas M0（512 MB）
+- RabbitMQ：CloudAMQP Little Lemur（1M messages/month）
+
+部署後需在 Render Dashboard 手動設定 `Redis__ConnectionString`、`Mongo__ConnectionString`、`RabbitMq__*` 等環境變數（`render.yaml` 中標記為 `sync: false`）。
+
+---
+
+## 環境變數完整說明
+
+| 變數 | 必填 | 說明 |
+|------|------|------|
+| `POSTGRES_PASSWORD` | 是 | PostgreSQL 密碼 |
+| `MONGO_INITDB_ROOT_PASSWORD` | 是 | MongoDB root 密碼 |
+| `REDIS_PASSWORD` | 是 | Redis 認證密碼 |
+| `CACHE_ADMIN_API_KEY` | 是 | 快取清除 API 金鑰 |
+| `VITE_BENTO_CACHE_ADMIN_KEY` | 是 | 與 `CACHE_ADMIN_API_KEY` 相同值，注入 React build |
+| `DOCKERHUB_USERNAME` | CI/CD | Docker Hub 帳號（Jenkins push 用） |
+| `DOCKERHUB_TOKEN` | CI/CD | Docker Hub Access Token |
+| `POSTGRES_USER` | 有預設值 `bento` | PostgreSQL 帳號 |
+| `POSTGRES_DB` | 有預設值 `bentodb` | PostgreSQL 資料庫名稱 |
+| `RABBITMQ_DEFAULT_USER` | 有預設值 `guest` | RabbitMQ 帳號（正式環境應改） |
+| `RABBITMQ_DEFAULT_PASS` | 有預設值 `guest` | RabbitMQ 密碼（正式環境應改） |
+| `VITE_BENTO_GATEWAY_BASE_URL` | 有預設值 | React 呼叫 Gateway 的 Base URL |
+| `BLAZOR_GATEWAY_BASE_URL` | 有預設值 | Blazor 呼叫 Gateway 的 Base URL |
+
+Proxy 相關（企業網路才需要）：`PROXY_USER`、`PROXY_PASS`、`HTTP_PROXY`、`HTTPS_PROXY`

@@ -1,0 +1,73 @@
+services:
+  # API
+  - type: web
+    name: bento-api
+    runtime: docker
+    dockerfilePath: ./backend/Bento.Api/Dockerfile
+    dockerContext: ./backend/Bento.Api
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__PostgreSql
+        fromDatabase:
+          name: bento-postgres
+          property: connectionString
+      - key: Redis__ConnectionString
+        sync: false
+      - key: Mongo__ConnectionString
+        sync: false
+      - key: RabbitMq__Host
+        sync: false
+      - key: RabbitMq__UserName
+        sync: false
+      - key: RabbitMq__Password
+        sync: false
+      - key: RabbitMq__VirtualHost
+        sync: false
+      - key: Cache__AdminApiKey
+        generateValue: true
+      - key: Cors__AllowedOrigins__0
+        value: https://bento-client.onrender.com
+      - key: Cors__AllowedOrigins__1
+        value: https://bento-blazor.onrender.com
+
+  # Gateway
+  - type: web
+    name: bento-gateway
+    runtime: docker
+    dockerfilePath: ./backend/Bento.Gateway/Dockerfile
+    dockerContext: ./backend/Bento.Gateway
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ReverseProxy__Clusters__bento-api-cluster__Destinations__destination1__Address
+        value: https://bento-api.onrender.com/
+
+  # Blazor
+  - type: web
+    name: bento-blazor
+    runtime: docker
+    dockerfilePath: ./frontend/bento-blazor/Dockerfile
+    dockerContext: ./frontend/bento-blazor
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Gateway__BaseUrl
+        value: https://bento-gateway.onrender.com/gateway
+
+  - type: web
+    name: bento-client
+    runtime: docker
+    dockerfilePath: ./frontend/bento-client/Dockerfile
+    dockerContext: ./frontend/bento-client
+    dockerBuildArgs:
+      - key: VITE_BENTO_GATEWAY_BASE_URL
+        value: https://bento-gateway.onrender.com/gateway
+      - key: VITE_BENTO_CACHE_ADMIN_KEY
+        value: 先填一個暫時值，之後從 API 的環境變數複製 Cache__AdminApiKey 來
+
+databases:
+  - name: bento-postgres
+    plan: free
+    databaseName: bentodb
+    user: bento
