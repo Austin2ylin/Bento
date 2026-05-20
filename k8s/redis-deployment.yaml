@@ -22,8 +22,8 @@ spec:
           env:
             - name: REDIS_PASSWORD
               valueFrom:
-                configMapKeyRef:
-                  name: bento-app-config
+                secretKeyRef:
+                  name: bento-secret
                   key: REDIS_PASSWORD
           ports:
             - containerPort: 6379

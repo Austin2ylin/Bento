@@ -56,7 +56,6 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer
 builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 
-// Singleton：持久連線，重用 RabbitMQ channel；MongoClient 本身為 thread-safe 設計
 builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
 builder.Services.AddSingleton<IMongoService, MongoService>();
 builder.Services.AddHostedService<OutboxDispatcherService>();
@@ -73,5 +72,9 @@ app.UseCors("BentoCors");
 app.MapControllers();
 
 app.MapGet("/", () => Results.Ok(new { message = "Bento API running" }));
-
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<BentoDbContext>();
+    db.Database.Migrate();
+}
 app.Run();

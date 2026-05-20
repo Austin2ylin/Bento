@@ -19,13 +19,9 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5050
-          # 非敏感設定從 ConfigMap 整批注入
           envFrom:
             - configMapRef:
                 name: bento-app-config
-          # 課程重點：含密碼的 Connection String 及 API Key 從 Secret 個別注入。
-          # envFrom secretRef 可整批注入 Secret，但 env + secretKeyRef 的寫法
-          # 能明確列出每個敏感變數，讓讀者一眼看出哪些是敏感設定。
           env:
             - name: ConnectionStrings__PostgreSql
               valueFrom:

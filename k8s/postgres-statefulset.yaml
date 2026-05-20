@@ -4,7 +4,7 @@ metadata:
   name: postgres
   namespace: bento
 spec:
-  clusterIP: None    # Headless Service：有狀態服務的正確模式，Pod 以固定 DNS 名稱互連
+  clusterIP: None
   selector:
     app: postgres
   ports:
@@ -44,7 +44,6 @@ spec:
                 configMapKeyRef:
                   name: bento-app-config
                   key: POSTGRES_DB
-            # 課程重點：密碼從 Secret 取得，不從 ConfigMap 取得
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:

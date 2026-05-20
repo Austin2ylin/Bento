@@ -3,39 +3,37 @@ kind: ConfigMap
 metadata:
   name: bento-app-config
   namespace: bento
-# 課程重點：ConfigMap 只放非敏感設定。
-# 密碼、API Key、含密碼的 Connection String → 改放 k8s/secret.yaml
+
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
 
-  # RabbitMQ（guest/guest 為官方預設開發帳號，生產環境請改為 Secret）
   RabbitMq__Host: "rabbitmq"
   RabbitMq__Port: "5672"
   RabbitMq__UserName: "guest"
   RabbitMq__Password: "guest"
   RabbitMq__QueueName: "order-created"
 
-  # MongoDB 非敏感設定
+  # MongoDB
   Mongo__Database: "bento_logs"
   Mongo__OrderCollection: "order_logs"
 
-  # CORS 允許來源
+  # CORS
   Cors__AllowedOrigins__0: "http://localhost:3000"
   Cors__AllowedOrigins__1: "http://localhost:3001"
   Cors__AllowedOrigins__2: "http://localhost"
 
-  # PostgreSQL 非敏感設定（供 StatefulSet 使用）
+  # PostgreSQL
   POSTGRES_USER: "bento"
   POSTGRES_DB: "bentodb"
 
-  # MongoDB 非敏感設定（供 StatefulSet 使用）
+  # MongoDB
   MONGO_INITDB_ROOT_USERNAME: "bento"
 
-  # RabbitMQ 非敏感設定（供 Deployment 使用）
+  # RabbitMQ 
   RABBITMQ_DEFAULT_USER: "guest"
   RABBITMQ_DEFAULT_PASS: "guest"
 
-  # Blazor Server Gateway 位址（容器內部網路）
+  # Blazor Server Gateway
   Gateway__BaseUrl: "http://bento-gateway:5000/gateway"
 ---
 apiVersion: v1
