@@ -1,18 +1,3 @@
-# docker-compose.alternatives.yml
-#
-# 課程補充：MSSQL 與 MariaDB 作為 PostgreSQL 的替代資料庫選項。
-# 此檔案不會被根目錄的 docker compose up 自動載入。
-#
-# 課程重點：.NET EF Core 支援多種資料庫，
-# 只需更換 Connection String 與對應的 NuGet 套件即可切換：
-#   PostgreSQL → Npgsql.EntityFrameworkCore.PostgreSQL
-#   SQL Server → Microsoft.EntityFrameworkCore.SqlServer
-#   MySQL/MariaDB → Pomelo.EntityFrameworkCore.MySql
-#
-# 啟動特定替代資料庫（不影響主要服務）：
-#   docker compose -f docker-compose.alternatives.yml up mssql -d
-#   docker compose -f docker-compose.alternatives.yml up mariadb -d
-
 services:
   mssql:
     container_name: ${MSSQL_CONTAINER_NAME:-mssql}
@@ -31,7 +16,7 @@ services:
       resources:
         limits:
           cpus: "0.50"
-          memory: 2G    # SQL Server 最低需求約 2GB
+          memory: 2G
 
   mariadb:
     container_name: ${MARIADB_CONTAINER_NAME:-mariadb}

@@ -41,9 +41,9 @@ spec:
                   key: MONGO_INITDB_ROOT_USERNAME
             - name: MONGO_INITDB_ROOT_PASSWORD
               valueFrom:
-                configMapKeyRef:
-                  name: bento-app-config
-                  key: MONGO_INITDB_ROOT_PASSWORD
+              secretKeyRef:
+               name: bento-secret
+               key: MONGO_INITDB_ROOT_PASSWORD
           volumeMounts:
             - name: mongo-data
               mountPath: /data/db

@@ -1,6 +1,4 @@
 registry=https://registry.npmjs.org/
-
-# 公司網路若需要 proxy，請複製成 .npmrc 後自行填入，不要提交真實帳密。
 # proxy=http://username:password@proxy.company.com:8080
 # https-proxy=http://username:password@proxy.company.com:8080
 # noproxy=localhost,127.0.0.1

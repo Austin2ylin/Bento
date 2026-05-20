@@ -12,8 +12,7 @@ services:
       - bento-blazor
     networks:
       - bento-network
-    # NGINX Load Balancer 需綁定 port 80，須以 root 啟動 master process
-    # worker process 已自動切換為 nginx user 執行
+
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -36,7 +35,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - bento-network
-    # Jenkins 需要存取 Docker socket，不套用 cap_drop
     security_opt:
       - no-new-privileges:true
     deploy:
